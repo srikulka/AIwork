@@ -71,6 +71,9 @@
       image-rendering: pixelated;
       box-shadow: inset 0 0 30px rgba(77, 118, 255, 0.12);
       touch-action: none;
+      -webkit-user-select: none;
+      user-select: none;
+      -webkit-touch-callout: none;
     }
     .help {
       margin-top: 10px;
@@ -971,20 +974,36 @@
       ensureAudio();
       if (!e.touches.length) return;
       const t = e.touches[0];
+      const now = Date.now();
+      const isDoubleTap = lastTapPos
+        && now - lastTapAt < 360
+        && Math.hypot(t.clientX - lastTapPos.x, t.clientY - lastTapPos.y) < 32;
+
+      lastTapAt = now;
+      lastTapPos = { x: t.clientX, y: t.clientY };
+
+      if (isDoubleTap) {
+        e.preventDefault();
+        touchStart = null;
+        shootFireball();
+        lastTapAt = 0;
+        lastTapPos = null;
+        return;
+      }
+
       touchStart = { x: t.clientX, y: t.clientY };
-    }, { passive: true });
+    }, { passive: false });
     canvas.addEventListener('touchend', (e) => {
       if (!touchStart || !e.changedTouches.length) return;
       const t = e.changedTouches[0];
       const dx = t.clientX - touchStart.x;
       const dy = t.clientY - touchStart.y;
-      if (Math.abs(dx) < 24 && Math.abs(dy) < 24) {
-        handleMobileTap(t.clientX, t.clientY);
-      } else {
+      e.preventDefault();
+      if (Math.abs(dx) >= 24 || Math.abs(dy) >= 24) {
         handleSwipe(dx, dy);
       }
       touchStart = null;
-    }, { passive: true });
+    }, { passive: false });
     canvas.addEventListener('pointerdown', (e) => {
       if (e.pointerType === 'touch') return;
       touchStart = { x: e.clientX, y: e.clientY };
