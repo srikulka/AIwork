@@ -483,12 +483,11 @@
     function setDirection(dir) {
       if (!state || state.over || state.won) return;
       state.player.nextDir = { ...dir };
-      if (!state.player.dir.x && !state.player.dir.y && canMove(state.player, dir)) {
+      state.player.facing = { ...dir };
+      if (!state.player.dir.x && !state.player.dir.y) {
         state.player.dir = { ...dir };
-        state.player.facing = { ...dir };
-        state.gameStarted = true;
       }
-      if (state.player.dir.x || state.player.dir.y) state.gameStarted = true;
+      state.gameStarted = true;
     }
 
     function handleKeydown(e) {

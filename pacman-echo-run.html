@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-      <title>इको रन v1.1</title>
+      <title>इको रन v1.2</title>
   <style>
     :root {
       --bg: #070b1a;
@@ -587,12 +587,11 @@
     function setDirection(dir) {
       if (!state || state.over || state.won) return;
       state.player.nextDir = { ...dir };
-      if (!state.player.dir.x && !state.player.dir.y && canMove(state.player, dir)) {
+      state.player.facing = { ...dir };
+      if (!state.player.dir.x && !state.player.dir.y) {
         state.player.dir = { ...dir };
-        state.player.facing = { ...dir };
-        state.gameStarted = true;
       }
-      if (state.player.dir.x || state.player.dir.y) state.gameStarted = true;
+      state.gameStarted = true;
     }
 
     function handleKeydown(e) {
