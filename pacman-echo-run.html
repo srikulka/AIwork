@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-      <title>इको रन</title>
+      <title>इको रन v1.1</title>
   <style>
     :root {
       --bg: #070b1a;
@@ -596,21 +596,29 @@
     }
 
     function handleKeydown(e) {
-      const k = e.key.toLowerCase();
-      const controlKeys = ['arrowleft', 'arrowright', 'arrowup', 'arrowdown', 'a', 'd', 'w', 's', ' ', 'r'];
-      if (controlKeys.includes(k)) e.preventDefault();
-      if (k === 'arrowleft' || k === 'a') setDirection(dirs.left);
-      if (k === 'arrowright' || k === 'd') setDirection(dirs.right);
-      if (k === 'arrowup' || k === 'w') setDirection(dirs.up);
-      if (k === 'arrowdown' || k === 's') setDirection(dirs.down);
-      if (k === ' ') shootFireball();
-      if (k === 'r') resetGame();
+      const key = (e.key || '').toLowerCase();
+      const code = e.code || '';
+      const controlKeys = ['arrowleft', 'arrowright', 'arrowup', 'arrowdown', 'a', 'd', 'w', 's', ' ', 'spacebar', 'r'];
+      const controlCodes = ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'KeyA', 'KeyD', 'KeyW', 'KeyS', 'Space', 'KeyR'];
+      if (controlKeys.includes(key) || controlCodes.includes(code)) e.preventDefault();
+
+      if (key === 'arrowleft' || key === 'a' || code === 'ArrowLeft' || code === 'KeyA') setDirection(dirs.left);
+      if (key === 'arrowright' || key === 'd' || code === 'ArrowRight' || code === 'KeyD') setDirection(dirs.right);
+      if (key === 'arrowup' || key === 'w' || code === 'ArrowUp' || code === 'KeyW') setDirection(dirs.up);
+      if (key === 'arrowdown' || key === 's' || code === 'ArrowDown' || code === 'KeyS') setDirection(dirs.down);
+      if (key === ' ' || key === 'spacebar' || code === 'Space') shootFireball();
+      if (key === 'r' || code === 'KeyR') resetGame();
     }
 
     window.addEventListener('keydown', handleKeydown, { passive: false });
     document.addEventListener('keydown', handleKeydown, { passive: false });
+    document.body.tabIndex = 0;
+    document.body.addEventListener('click', () => document.body.focus());
     canvas.addEventListener('click', () => canvas.focus());
-    window.addEventListener('load', () => canvas.focus());
+    window.addEventListener('load', () => {
+      document.body.focus();
+      canvas.focus();
+    });
 
     resetGame();
     requestAnimationFrame(loop);
