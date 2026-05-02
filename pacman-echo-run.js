@@ -505,11 +505,28 @@
       if (key === 'r' || code === 'KeyR') resetGame();
     }
 
+    function handleControlPress(target) {
+      const dir = target.dataset.dir;
+      const action = target.dataset.action;
+      if (dir && dirs[dir]) setDirection(dirs[dir]);
+      if (action === 'fire') shootFireball();
+    }
+
     window.addEventListener('keydown', handleKeydown, { passive: false });
     document.addEventListener('keydown', handleKeydown, { passive: false });
     document.body.tabIndex = 0;
     document.body.addEventListener('click', () => document.body.focus());
     canvas.addEventListener('click', () => canvas.focus());
+    document.querySelectorAll('.ctrl-btn').forEach((btn) => {
+      btn.addEventListener('pointerdown', (e) => {
+        e.preventDefault();
+        handleControlPress(btn);
+      });
+      btn.addEventListener('click', (e) => {
+        e.preventDefault();
+        handleControlPress(btn);
+      });
+    });
     window.addEventListener('load', () => {
       document.body.focus();
       canvas.focus();

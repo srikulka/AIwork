@@ -72,6 +72,33 @@
       gap: 12px;
       flex-wrap: wrap;
     }
+    .controls {
+      margin-top: 14px;
+      display: grid;
+      justify-content: center;
+      gap: 8px;
+    }
+    .controls-row {
+      display: flex;
+      justify-content: center;
+      gap: 8px;
+    }
+    .ctrl-btn {
+      width: 56px;
+      height: 56px;
+      border: 0;
+      border-radius: 14px;
+      background: #1a2b63;
+      color: #fff;
+      font-size: 24px;
+      font-weight: 700;
+      box-shadow: 0 6px 18px rgba(0,0,0,0.25);
+      touch-action: manipulation;
+    }
+    .ctrl-btn:active {
+      transform: scale(0.96);
+      background: #29449b;
+    }
     .footer-note {
       margin-top: 10px;
       text-align: center;
@@ -97,6 +124,19 @@
       <div><b>हलवा:</b> Arrow keys / WASD</div>
       <div><b>Space:</b> आगगोळा  <b>R:</b> पुन्हा सुरू</div>
       <div>एक जीव गेला की इको तयार होतो. Space दाबून समोरच्या भुतावर आगगोळा फेका.</div>
+    </div>
+    <div class="controls">
+      <div class="controls-row">
+        <button class="ctrl-btn" data-dir="up" aria-label="वर">↑</button>
+      </div>
+      <div class="controls-row">
+        <button class="ctrl-btn" data-dir="left" aria-label="डावे">←</button>
+        <button class="ctrl-btn" data-action="fire" aria-label="आगगोळा">🔥</button>
+        <button class="ctrl-btn" data-dir="right" aria-label="उजवे">→</button>
+      </div>
+      <div class="controls-row">
+        <button class="ctrl-btn" data-dir="down" aria-label="खाली">↓</button>
+      </div>
     </div>
     <div class="footer-note">मराठी कट्टा साठी तयार केला</div>
   </div>
@@ -609,11 +649,28 @@
       if (key === 'r' || code === 'KeyR') resetGame();
     }
 
+    function handleControlPress(target) {
+      const dir = target.dataset.dir;
+      const action = target.dataset.action;
+      if (dir && dirs[dir]) setDirection(dirs[dir]);
+      if (action === 'fire') shootFireball();
+    }
+
     window.addEventListener('keydown', handleKeydown, { passive: false });
     document.addEventListener('keydown', handleKeydown, { passive: false });
     document.body.tabIndex = 0;
     document.body.addEventListener('click', () => document.body.focus());
     canvas.addEventListener('click', () => canvas.focus());
+    document.querySelectorAll('.ctrl-btn').forEach((btn) => {
+      btn.addEventListener('pointerdown', (e) => {
+        e.preventDefault();
+        handleControlPress(btn);
+      });
+      btn.addEventListener('click', (e) => {
+        e.preventDefault();
+        handleControlPress(btn);
+      });
+    });
     window.addEventListener('load', () => {
       document.body.focus();
       canvas.focus();
