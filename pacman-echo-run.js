@@ -491,15 +491,22 @@
       if (state.player.dir.x || state.player.dir.y) state.gameStarted = true;
     }
 
-    window.addEventListener('keydown', (e) => {
+    function handleKeydown(e) {
       const k = e.key.toLowerCase();
+      const controlKeys = ['arrowleft', 'arrowright', 'arrowup', 'arrowdown', 'a', 'd', 'w', 's', ' ', 'r'];
+      if (controlKeys.includes(k)) e.preventDefault();
       if (k === 'arrowleft' || k === 'a') setDirection(dirs.left);
       if (k === 'arrowright' || k === 'd') setDirection(dirs.right);
       if (k === 'arrowup' || k === 'w') setDirection(dirs.up);
       if (k === 'arrowdown' || k === 's') setDirection(dirs.down);
       if (k === ' ') shootFireball();
       if (k === 'r') resetGame();
-    });
+    }
+
+    window.addEventListener('keydown', handleKeydown, { passive: false });
+    document.addEventListener('keydown', handleKeydown, { passive: false });
+    canvas.addEventListener('click', () => canvas.focus());
+    window.addEventListener('load', () => canvas.focus());
 
     resetGame();
     requestAnimationFrame(loop);
