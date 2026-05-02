@@ -19,11 +19,14 @@
 
     const canvas = document.getElementById('game');
     const ctx = canvas.getContext('2d');
+    const startArt = new Image();
+    startArt.src = 'bhutatki-start-screen.png';
     const scoreEl = document.getElementById('score');
     const livesEl = document.getElementById('lives');
     const pelletsEl = document.getElementById('pellets');
     const powerEl = document.getElementById('power');
     const statusEl = document.getElementById('status');
+    const mobileNoteEl = document.getElementById('mobile-note');
 
     const dirs = {
       left: { x: -1, y: 0 },
@@ -35,6 +38,92 @@
 
     let state;
     let lastTime = 0;
+    let audioCtx = null;
+    let musicTimers = [];
+    let musicStarted = false;
+    let touchStart = null;
+    const isMobileLike = window.matchMedia('(pointer: coarse)').matches || /iphone|ipad|android|mobile/i.test(navigator.userAgent);
+
+    function ensureAudio() {
+      if (!audioCtx) {
+        const Ctx = window.AudioContext || window.webkitAudioContext;
+        if (!Ctx) return null;
+        audioCtx = new Ctx();
+      }
+      if (audioCtx.state === 'suspended') audioCtx.resume();
+      return audioCtx;
+    }
+
+    function playTone(freq, duration, type = 'square', volume = 0.04, sweep = null) {
+      const ctx = ensureAudio();
+      if (!ctx) return;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = type;
+      osc.frequency.setValueAtTime(freq, ctx.currentTime);
+      if (sweep !== null) osc.frequency.linearRampToValueAtTime(sweep, ctx.currentTime + duration);
+      gain.gain.setValueAtTime(volume, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + duration);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start();
+      osc.stop(ctx.currentTime + duration);
+    }
+
+    const sounds = {
+      pellet: () => playTone(720, 0.05, 'square', 0.025, 840),
+      orb: () => { playTone(420, 0.14, 'sawtooth', 0.045, 760); setTimeout(() => playTone(760, 0.12, 'square', 0.03, 980), 35); },
+      fire: () => playTone(300, 0.08, 'sawtooth', 0.035, 150),
+      hitGhost: () => { playTone(260, 0.12, 'square', 0.04, 520); setTimeout(() => playTone(520, 0.1, 'triangle', 0.025, 760), 30); },
+      hurt: () => playTone(210, 0.35, 'sawtooth', 0.05, 90),
+      win: () => { [523, 659, 784].forEach((f, i) => setTimeout(() => playTone(f, 0.16, 'triangle', 0.03, f * 1.08), i * 90)); }
+    };
+
+    function clearMusicTimers() {
+      musicTimers.forEach((id) => clearTimeout(id));
+      musicTimers = [];
+    }
+
+    function stopMusic() {
+      clearMusicTimers();
+      musicStarted = false;
+    }
+
+    function startMusic() {
+      if (musicStarted) return;
+      const ctx = ensureAudio();
+      if (!ctx) return;
+      musicStarted = true;
+      const melody = [262, 330, 392, 330, 294, 349, 440, 349];
+      const bass = [131, 147, 165, 147, 131, 147, 165, 196];
+      const beatMs = 260;
+      let step = 0;
+
+      const schedule = () => {
+        if (!musicStarted || !state || state.paused || state.over || state.won || !state.started) return;
+        playTone(melody[step % melody.length], 0.18, 'triangle', 0.018, melody[step % melody.length] * 1.02);
+        playTone(bass[step % bass.length], 0.22, 'sine', 0.012, bass[step % bass.length] * 0.98);
+        step += 1;
+        musicTimers.push(setTimeout(schedule, beatMs));
+      };
+
+      schedule();
+    }
+
+    function spawnBurst(x, y, color, count = 8, speed = 3.2) {
+      for (let i = 0; i < count; i++) {
+        const angle = (Math.PI * 2 * i) / count + Math.random() * 0.35;
+        const vel = speed * (0.5 + Math.random() * 0.8);
+        state.particles.push({
+          x, y,
+          vx: Math.cos(angle) * vel,
+          vy: Math.sin(angle) * vel,
+          life: 0.45 + Math.random() * 0.2,
+          size: 2 + Math.random() * 3,
+          color
+        });
+      }
+    }
 
     function parseMap() {
       const tiles = [];
@@ -81,12 +170,14 @@
         powerTimer: 0,
         won: false,
         over: false,
+        started: false,
+        paused: false,
         gameStarted: false,
         animTime: 0,
-        currentRunPath: [],
         fireballs: [],
         fireballCooldown: 0,
-        echo: { active: false, path: [], index: 0, x: 0, y: 0 },
+        particles: [],
+        flashTimer: 0,
         player: createEntity(parsed.playerSpawn.x, parsed.playerSpawn.y, 5.2),
         ghosts: parsed.ghostSpawns.map((spawn, i) => ({
           ...createEntity(spawn.x, spawn.y, 3.2 + i * 0.25),
@@ -95,9 +186,11 @@
           targetX: null,
           targetY: null,
           respawnTimer: 0,
+          personality: i === 0 ? 'hunter' : 'ambusher',
           color: i === 0 ? '#ff5d73' : '#ff96d5'
         }))
       };
+      stopMusic();
       state.player.dir = { x: 0, y: 0 };
       updateHud();
     }
@@ -174,6 +267,11 @@
       const nextTileX = tileX + dir.x;
       const nextTileY = tileY + dir.y;
       if (isWall(nextTileX, nextTileY)) return false;
+      if (!state.started) {
+        state.started = true;
+        state.paused = false;
+        startMusic();
+      }
       player.dir = { ...dir };
       player.facing = { ...dir };
       player.targetX = nextTileX + 0.5;
@@ -211,9 +309,6 @@
         }
       }
 
-      state.currentRunPath.push({ x: state.player.x, y: state.player.y });
-      if (state.currentRunPath.length > 1800) state.currentRunPath.shift();
-
       const tx = Math.floor(state.player.x);
       const ty = Math.floor(state.player.y);
       const k = key(tx, ty);
@@ -221,15 +316,22 @@
       if (state.pellets.has(k)) {
         state.pellets.delete(k);
         state.score += 10;
+        sounds.pellet();
+        spawnBurst(state.player.x, state.player.y, '#fff1a8', 4, 1.8);
       }
       if (state.orbs.has(k)) {
         state.orbs.delete(k);
         state.score += 50;
         state.powerTimer = 6;
+        sounds.orb();
+        spawnBurst(state.player.x, state.player.y, '#fff6a5', 12, 2.8);
+        state.flashTimer = 0.18;
       }
 
       if (state.pellets.size === 0 && state.orbs.size === 0) {
         state.won = true;
+        stopMusic();
+        sounds.win();
       }
     }
 
@@ -250,18 +352,45 @@
         return;
       }
 
-      const useEcho = state.echo.active && dist(ghost, state.echo) < dist(ghost, state.player) + 1.2;
-      const target = useEcho ? { x: state.echo.x, y: state.echo.y } : { x: state.player.x, y: state.player.y };
+      const target = getGhostTarget(ghost);
       choices.sort((a, b) => {
         const da = Math.hypot((tileX + a.x + 0.5) - target.x, (tileY + a.y + 0.5) - target.y);
         const db = Math.hypot((tileX + b.x + 0.5) - target.x, (tileY + b.y + 0.5) - target.y);
         return da - db;
       });
 
+      if (state.powerTimer > 0) choices.reverse();
+
       ghost.dir = choices[0];
       ghost.lastDecisionTile = currentTile;
       ghost.targetX = tileX + ghost.dir.x + 0.5;
       ghost.targetY = tileY + ghost.dir.y + 0.5;
+    }
+
+    function getGhostTarget(ghost) {
+      const baseTarget = { x: state.player.x, y: state.player.y };
+
+      if (state.powerTimer > 0) {
+        return {
+          x: ghost.x + (ghost.x - baseTarget.x),
+          y: ghost.y + (ghost.y - baseTarget.y)
+        };
+      }
+
+      if (ghost.personality === 'ambusher') {
+        const facing = state.player.facing || { x: 1, y: 0 };
+        return {
+          x: state.player.x + facing.x * 2,
+          y: state.player.y + facing.y * 2
+        };
+      }
+
+      if (ghost.personality === 'patroller') {
+        const near = dist(ghost, state.player) < 3.5;
+        return near ? baseTarget : { x: 1.5, y: 1.5 };
+      }
+
+      return baseTarget;
     }
 
     function updateGhosts(dt) {
@@ -302,20 +431,13 @@
       }
     }
 
-    function updateEcho() {
-      if (!state.echo.active || !state.echo.path.length) return;
-      const p = state.echo.path[Math.min(state.echo.index, state.echo.path.length - 1)];
-      state.echo.x = p.x;
-      state.echo.y = p.y;
-      state.echo.index += 2;
-      if (state.echo.index >= state.echo.path.length) state.echo.index = 0;
-    }
-
     function shootFireball() {
       if (!state || state.over || state.won) return;
+      if (state.paused || !state.started) return;
       if (state.fireballCooldown > 0) return;
       const facing = state.player.facing || { x: 1, y: 0 };
       if (!facing.x && !facing.y) return;
+      sounds.fire();
       state.fireballs.push({
         x: state.player.x,
         y: state.player.y,
@@ -354,6 +476,9 @@
           if (dist(fireball, ghost) < 0.55) {
             resetGhost(ghost, true);
             state.score += 150;
+            sounds.hitGhost();
+            spawnBurst(ghost.x, ghost.y, '#ff8c32', 12, 3.8);
+            state.flashTimer = 0.1;
             hit = true;
             break;
           }
@@ -370,6 +495,8 @@
           if (state.powerTimer > 0) {
             resetGhost(ghost, true);
             state.score += 200;
+            sounds.hitGhost();
+            spawnBurst(ghost.x, ghost.y, '#7aa8ff', 12, 3.6);
           } else {
             loseLife();
             return;
@@ -379,17 +506,9 @@
     }
 
     function loseLife() {
+      stopMusic();
+      sounds.hurt();
       state.lives -= 1;
-      if (state.currentRunPath.length > 20) {
-        state.echo = {
-          active: true,
-          path: [...state.currentRunPath],
-          index: 0,
-          x: state.currentRunPath[0].x,
-          y: state.currentRunPath[0].y
-        };
-      }
-      state.currentRunPath = [];
       state.player = createEntity(state.playerSpawn.x, state.playerSpawn.y, 5.2);
       state.player.dir = { x: 0, y: 0 };
       state.player.nextDir = { x: 0, y: 0 };
@@ -398,6 +517,8 @@
       state.player.targetY = null;
       state.fireballs = [];
       state.fireballCooldown = 0;
+      state.particles = [];
+      state.flashTimer = 0.2;
       state.ghosts.forEach((ghost) => {
         resetGhost(ghost, false);
       });
@@ -410,10 +531,52 @@
       livesEl.textContent = state.lives;
       pelletsEl.textContent = state.pellets.size + state.orbs.size;
       powerEl.textContent = `${Math.max(0, state.powerTimer).toFixed(1)}से`;
-      if (state.over) statusEl.textContent = 'खेळ संपला — R दाबा';
+      if (!state.started) statusEl.textContent = 'सुरू करण्यासाठी हलवा';
+      else if (state.paused) statusEl.textContent = 'थांबले आहे — P दाबा';
+      else if (state.over) statusEl.textContent = 'खेळ संपला — R दाबा';
       else if (state.won) statusEl.textContent = 'तुम्ही जिंकलात — R दाबा';
-      else if (state.echo.active) statusEl.textContent = 'इको सुरू';
-      else statusEl.textContent = 'इको बंद';
+      else statusEl.textContent = 'भुतांपासून सावध';
+    }
+
+    function updateMobileNote() {
+      if (!mobileNoteEl) return;
+      mobileNoteEl.textContent = isMobileLike
+        ? 'मोबाइलवर: स्क्रीनवर स्वाइप करून दिशा बदला. 🔥 दाबून आगगोळा फेका.'
+        : '';
+    }
+
+    function handleSwipe(dx, dy) {
+      if (Math.abs(dx) < 24 && Math.abs(dy) < 24) return;
+      if (Math.abs(dx) > Math.abs(dy)) {
+        setDirection(dx > 0 ? dirs.right : dirs.left);
+      } else {
+        setDirection(dy > 0 ? dirs.down : dirs.up);
+      }
+    }
+
+    function togglePause() {
+      if (!state || !state.started || state.over || state.won) return;
+      state.paused = !state.paused;
+      if (state.paused) {
+        stopMusic();
+      } else {
+        startMusic();
+      }
+      updateHud();
+    }
+
+    function updateParticles(dt) {
+      const next = [];
+      for (const p of state.particles) {
+        p.life -= dt;
+        if (p.life <= 0) continue;
+        p.x += p.vx * dt;
+        p.y += p.vy * dt;
+        p.vx *= 0.98;
+        p.vy *= 0.98;
+        next.push(p);
+      }
+      state.particles = next;
     }
 
     function drawCircle(x, y, radius, color) {
@@ -425,6 +588,11 @@
 
     function render() {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      if (state.flashTimer > 0) {
+        ctx.fillStyle = `rgba(255,255,255,${Math.min(0.12, state.flashTimer)})`;
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+      }
 
       for (let y = 0; y < state.tiles.length; y++) {
         for (let x = 0; x < state.tiles[y].length; x++) {
@@ -445,17 +613,22 @@
       }
       for (const orb of state.orbs) {
         const [x, y] = orb.split(',').map(Number);
+        ctx.shadowColor = '#fff6a5';
+        ctx.shadowBlur = 14;
         drawCircle(x * TILE + TILE / 2, y * TILE + TILE / 2, 7, '#fff6a5');
+        ctx.shadowBlur = 0;
       }
-      if (state.echo.active) {
-        ctx.save();
-        ctx.globalAlpha = 0.35;
-        drawCircle(state.echo.x * TILE, state.echo.y * TILE, 11, '#53ebff');
-        ctx.restore();
+      for (const fireball of state.fireballs) {
+        ctx.shadowColor = '#ff8c32';
+        ctx.shadowBlur = 18;
+        drawCircle(fireball.x * TILE, fireball.y * TILE, 5, '#ff8c32');
+        ctx.shadowBlur = 0;
       }
 
-      for (const fireball of state.fireballs) {
-        drawCircle(fireball.x * TILE, fireball.y * TILE, 5, '#ff8c32');
+      for (const p of state.particles) {
+        ctx.globalAlpha = Math.max(0, p.life * 1.8);
+        drawCircle(p.x * TILE, p.y * TILE, p.size, p.color);
+        ctx.globalAlpha = 1;
       }
 
       for (const ghost of state.ghosts) {
@@ -465,6 +638,8 @@
         const x = ghost.x * TILE;
         const y = ghost.y * TILE;
         ctx.fillStyle = color;
+        ctx.shadowColor = color;
+        ctx.shadowBlur = scared ? 18 : 10;
         ctx.beginPath();
         ctx.arc(x, y - 4, 10, Math.PI, 0);
         ctx.lineTo(x + 10, y + 9);
@@ -474,6 +649,7 @@
         ctx.lineTo(x - 10, y + 9);
         ctx.closePath();
         ctx.fill();
+        ctx.shadowBlur = 0;
         drawCircle(x - 4, y - 3, 2, '#fff');
         drawCircle(x + 4, y - 3, 2, '#fff');
       }
@@ -488,11 +664,14 @@
         -Math.PI / 2;
       const mouth = 0.22 + 0.16 * Math.abs(Math.sin(state.animTime * 14));
       ctx.fillStyle = '#ffd84d';
+      ctx.shadowColor = '#ffd84d';
+      ctx.shadowBlur = 16;
       ctx.beginPath();
       ctx.moveTo(px, py);
       ctx.arc(px, py, 11, baseAngle + mouth, baseAngle + Math.PI * 2 - mouth);
       ctx.closePath();
       ctx.fill();
+      ctx.shadowBlur = 0;
 
       if (state.over || state.won) {
         ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
@@ -501,19 +680,54 @@
         ctx.font = 'bold 26px Inter, sans-serif';
         ctx.textAlign = 'center';
         ctx.fillText(state.over ? 'खेळ संपला' : 'पातळी पूर्ण!', canvas.width / 2, canvas.height / 2 + 8);
+      } else if (!state.started || state.paused) {
+        if (!state.started && startArt.complete) {
+          ctx.save();
+          ctx.globalAlpha = 0.92;
+          ctx.drawImage(startArt, 0, 0, canvas.width, canvas.height);
+          ctx.restore();
+        }
+        ctx.fillStyle = 'rgba(3, 8, 20, 0.62)';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.textAlign = 'center';
+        if (!state.started) {
+          ctx.fillStyle = '#c7f6ff';
+          ctx.shadowColor = '#53ebff';
+          ctx.shadowBlur = 20;
+          ctx.font = 'bold 42px Inter, sans-serif';
+          ctx.fillText('भुताटकी', canvas.width / 2, 110);
+          ctx.shadowBlur = 0;
+          ctx.fillStyle = '#fff2b0';
+          ctx.font = '18px Inter, sans-serif';
+          ctx.fillText(isMobileLike ? 'स्क्रीनवर स्वाइप करून खेळ चालू करा' : 'बाणाचे बटण दाबून खेळ चालू करा', canvas.width / 2, canvas.height - 72);
+          ctx.fillStyle = '#d7e4ff';
+          ctx.font = '14px Inter, sans-serif';
+          ctx.fillText(isMobileLike ? '🔥 बटण = आगगोळा' : 'Space = आगगोळा   •   P = थांबा', canvas.width / 2, canvas.height - 42);
+        } else {
+          ctx.fillStyle = '#fff';
+          ctx.font = 'bold 28px Inter, sans-serif';
+          ctx.fillText('थांबले आहे', canvas.width / 2, canvas.height / 2 - 10);
+          ctx.font = '16px Inter, sans-serif';
+          ctx.fillStyle = '#cfe0ff';
+          ctx.fillText('पुन्हा सुरू करण्यासाठी P दाबा', canvas.width / 2, canvas.height / 2 + 24);
+        }
       }
     }
 
     function update(dt) {
-      if (state.over || state.won) return;
+      if (state.over || state.won || state.paused) {
+        updateHud();
+        return;
+      }
       state.animTime += dt;
       if (state.powerTimer > 0) state.powerTimer = Math.max(0, state.powerTimer - dt);
       if (state.fireballCooldown > 0) state.fireballCooldown = Math.max(0, state.fireballCooldown - dt);
+      if (state.flashTimer > 0) state.flashTimer = Math.max(0, state.flashTimer - dt);
       updatePlayer(dt);
       handleCollisions();
-      updateEcho();
       updateGhosts(dt);
       updateFireballs(dt);
+      updateParticles(dt);
       handleCollisions();
       updateHud();
     }
@@ -527,7 +741,7 @@
     }
 
     function setDirection(dir) {
-      if (!state || state.over || state.won) return;
+      if (!state || state.over || state.won || state.paused) return;
       state.player.nextDir = { ...dir };
       state.player.facing = { ...dir };
       if (state.player.targetX === null || state.player.targetY === null) {
@@ -539,8 +753,8 @@
     function handleKeydown(e) {
       const key = (e.key || '').toLowerCase();
       const code = e.code || '';
-      const controlKeys = ['arrowleft', 'arrowright', 'arrowup', 'arrowdown', 'a', 'd', 'w', 's', ' ', 'spacebar', 'r'];
-      const controlCodes = ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'KeyA', 'KeyD', 'KeyW', 'KeyS', 'Space', 'KeyR'];
+      const controlKeys = ['arrowleft', 'arrowright', 'arrowup', 'arrowdown', 'a', 'd', 'w', 's', ' ', 'spacebar', 'r', 'p'];
+      const controlCodes = ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'KeyA', 'KeyD', 'KeyW', 'KeyS', 'Space', 'KeyR', 'KeyP'];
       if (controlKeys.includes(key) || controlCodes.includes(code)) e.preventDefault();
 
       if (key === 'arrowleft' || key === 'a' || code === 'ArrowLeft' || code === 'KeyA') setDirection(dirs.left);
@@ -549,6 +763,7 @@
       if (key === 'arrowdown' || key === 's' || code === 'ArrowDown' || code === 'KeyS') setDirection(dirs.down);
       if (key === ' ' || key === 'spacebar' || code === 'Space') shootFireball();
       if (key === 'r' || code === 'KeyR') resetGame();
+      if (key === 'p' || code === 'KeyP') togglePause();
     }
 
     function handleControlPress(target) {
@@ -556,13 +771,35 @@
       const action = target.dataset.action;
       if (dir && dirs[dir]) setDirection(dirs[dir]);
       if (action === 'fire') shootFireball();
+      if (action === 'pause') togglePause();
     }
 
     window.addEventListener('keydown', handleKeydown, { passive: false });
     document.addEventListener('keydown', handleKeydown, { passive: false });
     document.body.tabIndex = 0;
-    document.body.addEventListener('click', () => document.body.focus());
-    canvas.addEventListener('click', () => canvas.focus());
+    document.body.addEventListener('click', () => { ensureAudio(); document.body.focus(); });
+    canvas.addEventListener('click', () => { ensureAudio(); canvas.focus(); });
+    canvas.addEventListener('touchstart', (e) => {
+      ensureAudio();
+      if (!e.touches.length) return;
+      const t = e.touches[0];
+      touchStart = { x: t.clientX, y: t.clientY };
+    }, { passive: true });
+    canvas.addEventListener('touchend', (e) => {
+      if (!touchStart || !e.changedTouches.length) return;
+      const t = e.changedTouches[0];
+      handleSwipe(t.clientX - touchStart.x, t.clientY - touchStart.y);
+      touchStart = null;
+    }, { passive: true });
+    canvas.addEventListener('pointerdown', (e) => {
+      if (e.pointerType === 'touch') return;
+      touchStart = { x: e.clientX, y: e.clientY };
+    });
+    canvas.addEventListener('pointerup', (e) => {
+      if (!touchStart) return;
+      handleSwipe(e.clientX - touchStart.x, e.clientY - touchStart.y);
+      touchStart = null;
+    });
     document.querySelectorAll('.ctrl-btn').forEach((btn) => {
       btn.addEventListener('pointerdown', (e) => {
         e.preventDefault();
@@ -576,6 +813,7 @@
     window.addEventListener('load', () => {
       document.body.focus();
       canvas.focus();
+      updateMobileNote();
     });
 
     resetGame();

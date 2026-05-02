@@ -5,7 +5,6 @@
       --pellet: #f5f1c8;
       --orb: #fff6a5;
       --player: #ffd84d;
-      --echo: rgba(83, 235, 255, 0.45);
       --danger: #ff5d73;
       --ghost2: #ff96d5;
       --text: #e8efff;
@@ -28,6 +27,7 @@
       border: 1px solid rgba(120, 155, 255, 0.2);
       border-radius: 18px;
       box-shadow: 0 20px 60px rgba(0, 0, 0, 0.45);
+      backdrop-filter: blur(4px);
     }
     .hud {
       display: flex;
@@ -47,14 +47,23 @@
       flex-wrap: wrap;
     }
     .pill { color: var(--good); }
+    .brand {
+      color: #9fc4ff;
+      font-size: 12px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      margin-top: 3px;
+    }
     canvas {
       width: 100%;
       height: auto;
       display: block;
-      background: #050816;
+      background: radial-gradient(circle at center, #0a1230, #050816 65%);
       border-radius: 12px;
       border: 1px solid rgba(120, 155, 255, 0.15);
       image-rendering: pixelated;
+      box-shadow: inset 0 0 30px rgba(77, 118, 255, 0.12);
+      touch-action: none;
     }
     .help {
       margin-top: 10px;
@@ -71,13 +80,8 @@
       justify-content: center;
       gap: 8px;
     }
-    .controls-row {
-      display: flex;
-      justify-content: center;
-      gap: 8px;
-    }
     .ctrl-btn {
-      width: 56px;
+      width: 72px;
       height: 56px;
       border: 0;
       border-radius: 14px;
@@ -91,6 +95,12 @@
     .ctrl-btn:active {
       transform: scale(0.96);
       background: #29449b;
+    }
+    .mobile-note {
+      margin-top: 8px;
+      text-align: center;
+      color: #9fd6ff;
+      font-size: 13px;
     }
     .footer-note {
       margin-top: 10px;
