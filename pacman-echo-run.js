@@ -66,6 +66,8 @@
         dir: { x: 0, y: 0 },
         nextDir: { x: 0, y: 0 },
         facing: { x: 1, y: 0 },
+        targetX: null,
+        targetY: null,
         speed
       };
     }
@@ -165,8 +167,50 @@
       }
     }
 
+    function tryStartPlayerMove(dir) {
+      const player = state.player;
+      const tileX = Math.floor(player.x);
+      const tileY = Math.floor(player.y);
+      const nextTileX = tileX + dir.x;
+      const nextTileY = tileY + dir.y;
+      if (isWall(nextTileX, nextTileY)) return false;
+      player.dir = { ...dir };
+      player.facing = { ...dir };
+      player.targetX = nextTileX + 0.5;
+      player.targetY = nextTileY + 0.5;
+      state.gameStarted = true;
+      return true;
+    }
+
     function updatePlayer(dt) {
-      moveEntity(state.player, dt);
+      const player = state.player;
+
+      if (player.targetX === null || player.targetY === null) {
+        player.x = tileCenter(player.x);
+        player.y = tileCenter(player.y);
+        if ((player.nextDir.x || player.nextDir.y) && tryStartPlayerMove(player.nextDir)) {
+          // started queued move
+        } else if ((player.dir.x || player.dir.y) && !tryStartPlayerMove(player.dir)) {
+          player.dir = { x: 0, y: 0 };
+        }
+      }
+
+      if (player.targetX !== null && player.targetY !== null) {
+        const step = player.speed * dt;
+        const dx = player.targetX - player.x;
+        const dy = player.targetY - player.y;
+        const distance = Math.hypot(dx, dy);
+        if (distance <= step) {
+          player.x = player.targetX;
+          player.y = player.targetY;
+          player.targetX = null;
+          player.targetY = null;
+        } else {
+          player.x += (dx / distance) * step;
+          player.y += (dy / distance) * step;
+        }
+      }
+
       state.currentRunPath.push({ x: state.player.x, y: state.player.y });
       if (state.currentRunPath.length > 1800) state.currentRunPath.shift();
 
@@ -350,6 +394,8 @@
       state.player.dir = { x: 0, y: 0 };
       state.player.nextDir = { x: 0, y: 0 };
       state.player.facing = { x: 1, y: 0 };
+      state.player.targetX = null;
+      state.player.targetY = null;
       state.fireballs = [];
       state.fireballCooldown = 0;
       state.ghosts.forEach((ghost) => {
@@ -484,8 +530,8 @@
       if (!state || state.over || state.won) return;
       state.player.nextDir = { ...dir };
       state.player.facing = { ...dir };
-      if (!state.player.dir.x && !state.player.dir.y) {
-        state.player.dir = { ...dir };
+      if (state.player.targetX === null || state.player.targetY === null) {
+        tryStartPlayerMove(dir);
       }
       state.gameStarted = true;
     }
