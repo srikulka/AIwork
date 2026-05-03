@@ -157,7 +157,7 @@
         <div>शक्ती: <b id="power">0.0से</b></div>
       </div>
       <div>
-      <div id="status" class="pill">खेळ सुरू करा</div>
+      <div id="status" class="pill"></div>
         <div class="brand">v2.0 Mobile Tune</div>
       </div>
     </div>
@@ -168,7 +168,6 @@
       <div>भुते चुकवा, गोळे खा, आणि आगगोळे फेका.</div>
     </div>
     <div id="mobile-note" class="mobile-note"></div>
-    <div class="footer-note">मराठी कट्टा साठी तयार केला</div>
   </div>
 
   <script>
@@ -194,7 +193,7 @@
     const canvas = document.getElementById('game');
     const ctx = canvas.getContext('2d');
     const startArt = new Image();
-    startArt.src = 'bhutatki-start-screen.png';
+    startArt.src = 'bhutatki-start-screen-v2.png';
     const scoreEl = document.getElementById('score');
     const livesEl = document.getElementById('lives');
     const pelletsEl = document.getElementById('pellets');
@@ -707,7 +706,7 @@
       livesEl.textContent = state.lives;
       pelletsEl.textContent = state.pellets.size + state.orbs.size;
       powerEl.textContent = `${Math.max(0, state.powerTimer).toFixed(1)}से`;
-      if (!state.started) statusEl.textContent = 'सुरू करण्यासाठी हलवा';
+      if (!state.started) statusEl.textContent = '';
       else if (state.paused) statusEl.textContent = 'थांबले आहे — P दाबा';
       else if (state.over) statusEl.textContent = 'खेळ संपला — R दाबा';
       else if (state.won) statusEl.textContent = 'तुम्ही जिंकलात — R दाबा';
@@ -889,12 +888,6 @@
           ctx.font = isMobileLike ? 'bold 34px Inter, sans-serif' : 'bold 42px Inter, sans-serif';
           ctx.fillText('भुताटकी', canvas.width / 2, isMobileLike ? 92 : 110);
           ctx.shadowBlur = 0;
-          ctx.fillStyle = '#fff2b0';
-          ctx.font = isMobileLike ? '15px Inter, sans-serif' : '18px Inter, sans-serif';
-          ctx.fillText(isMobileLike ? 'स्वाइप करून खेळ चालू करा' : 'बाणाचे बटण दाबून खेळ चालू करा', canvas.width / 2, canvas.height - (isMobileLike ? 56 : 72));
-          ctx.fillStyle = '#d7e4ff';
-          ctx.font = isMobileLike ? '12px Inter, sans-serif' : '14px Inter, sans-serif';
-          ctx.fillText(isMobileLike ? 'डबल टॅप = आगगोळा' : 'Space = आगगोळा   •   P = थांबा', canvas.width / 2, canvas.height - (isMobileLike ? 30 : 42));
         } else {
           ctx.fillStyle = '#fff';
           ctx.font = 'bold 28px Inter, sans-serif';
